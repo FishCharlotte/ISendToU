@@ -24,10 +24,10 @@ ISendToU 是一个基于 WebRTC 技术的文件传输网页应用，旨在通过
 
 ### 1. 安装依赖
 
-使用 `pnpm` 安装项目依赖：
+使用 `npm` 安装项目依赖：
 
 ```bash
-pnpm install
+npm install
 ```
 
 ### 2. 启动开发服务器
@@ -35,7 +35,7 @@ pnpm install
 运行以下命令启动开发服务器：
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 开发服务器启动后，浏览器会自动打开项目页面。
@@ -45,18 +45,10 @@ pnpm dev
 运行以下命令构建生产版本：
 
 ```bash
-pnpm build
+npm run build
 ```
 
 构建完成后，生成的文件会存放在 `dist/` 目录中。
-
-### 4. 本地预览生产版本
-
-运行以下命令预览生产版本：
-
-```bash
-pnpm preview
-```
 
 ## 项目结构
 
@@ -101,4 +93,3 @@ pnpm preview
 ## 许可证
 
 本项目为私有项目，仅供学习和内部使用。
-```
