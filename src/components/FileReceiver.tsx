@@ -12,7 +12,7 @@ import {checkRoomStatusApi, getSignalApi, joinRoomApi} from "../api";
 const ReceiverBox = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4),
     textAlign: 'center',
-    backgroundColor: theme.palette.background.default,
+    backgroundColor: '#ffffff',
     border: `2px dashed ${theme.palette.primary.main}`,
     height: '400px',
     display: 'flex',
