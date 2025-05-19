@@ -7,6 +7,7 @@ import SimplePeer from 'simple-peer';
 import { FileInfo } from '../types';
 import { FileIcon } from './FileIcon';
 import { saveFileToLocal } from "../utils";
+import {CompletedFilesList} from "./CompletedFilesList";
 
 
 const ReceiverBox = styled(Paper)(({ theme }) => ({
@@ -233,34 +234,7 @@ const FileReceiver: React.FC = () => {
                     <Typography variant="h6" gutterBottom>
                         已接收的文件
                     </Typography>
-                    <List>
-                        {completedFiles.map((file, index) => (
-                            <ListItem key={index}>
-                                <ListItemIcon>
-                                    <Box sx={{ position: 'relative' }}>
-                                        <Avatar sx={{ bgcolor: 'background.paper' }}>
-                                            <FileIcon fileName={file.name} />
-                                        </Avatar>
-                                        <CheckCircleIcon
-                                            sx={{
-                                                position: 'absolute',
-                                                bottom: -4,
-                                                right: -4,
-                                                color: 'success.main',
-                                                fontSize: '1.2rem',
-                                                bgcolor: 'background.paper',
-                                                borderRadius: '50%'
-                                            }}
-                                        />
-                                    </Box>
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary={file.name}
-                                    secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
-                                />
-                            </ListItem>
-                        ))}
-                    </List>
+                    <CompletedFilesList data={completedFiles} />
                 </Box>
             )}
         </Box>

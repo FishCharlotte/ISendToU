@@ -10,6 +10,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { copyToClipboard } from '../utils';
 import { Snackbar, Alert } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import {CompletedFilesList} from "./CompletedFilesList";
 
 const UploadBox = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4),
@@ -266,11 +267,11 @@ const FileUploadArea: React.FC = () => {
                             </IconButton>
                         </Box>
 
-                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                        <Box sx={{ display: 'flex', mt: 2 }}>
                             <QRCodeSVG value={shareLink} size={200} />
                         </Box>
 
-                        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
                             将此链接发送给接收方以开始传输
                         </Typography>
 
@@ -301,34 +302,8 @@ const FileUploadArea: React.FC = () => {
                     <Typography variant="h6" gutterBottom>
                         已完成的传输
                     </Typography>
-                    <List>
-                        {completedFiles.map((file, index) => (
-                            <ListItem key={index}>
-                                <ListItemIcon>
-                                    <Box sx={{ position: 'relative' }}>
-                                        <Avatar sx={{ bgcolor: 'background.paper' }}>
-                                            <FileIcon fileName={file.name} />
-                                        </Avatar>
-                                        <CheckCircleIcon
-                                            sx={{
-                                                position: 'absolute',
-                                                bottom: -4,
-                                                right: -4,
-                                                color: 'success.main',
-                                                fontSize: '1.2rem',
-                                                bgcolor: 'background.paper',
-                                                borderRadius: '50%'
-                                            }}
-                                        />
-                                    </Box>
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary={file.name}
-                                    secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
-                                />
-                            </ListItem>
-                        ))}
-                    </List>
+
+                    <CompletedFilesList data={completedFiles} />
                 </Box>
             )}
         </Box>
