@@ -1,9 +1,15 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Box, Paper, Typography, LinearProgress, Link } from '@mui/material';
+import { Box, Paper, Typography, LinearProgress, Link, List, ListItem, ListItemIcon, ListItemText, Avatar, IconButton } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { styled } from '@mui/material/styles';
 import SimplePeer from 'simple-peer';
+import {FileIcon} from "./FileIcon";
+import { QRCodeSVG } from 'qrcode.react';
+import { copyToClipboard } from '../utils';
+import { Snackbar, Alert } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 const UploadBox = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4),
@@ -18,26 +24,36 @@ const UploadBox = styled(Paper)(({ theme }) => ({
 
 const FileUploadArea: React.FC = () => {
     const [transferProgress, setTransferProgress] = useState<number>(0);
+    const [isWaiting, setIsWaiting] = useState<boolean>(false);
     const [isTransferring, setIsTransferring] = useState<boolean>(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shareLink, setShareLink] = useState<string>('');
     const [roomId, setRoomId] = useState<string>('');
+    const [completedFiles, setCompletedFiles] = useState<Array<{ name: string; size: number }>>([]);
+    const peerRef = useRef<SimplePeer.Instance | null>(null); // 用于存储 SimplePeer 实例
+    const [showCopySuccess, setShowCopySuccess] = useState(false);
+    const [copyMessage, setCopyMessage] = useState('');
 
     const createRoom = async (file: File) => {
         try {
-            // 创建 WebRTC 连接
+            if (peerRef.current) {
+                console.log('连接已存在，直接发送文件');
+                sendFile(file, peerRef.current);
+                return;
+            }
+
             const peer = new SimplePeer({
                 initiator: true,
-                trickle: false // enable/disable trickle ICE and get a single 'signal' event (slower)
+                trickle: false,
             });
 
-            // 等待获取信令数据
+            peerRef.current = peer; // 存储 SimplePeer 实例
+
             const signalData = await new Promise((resolve) => {
                 peer.on('signal', resolve);
             });
 
-            // 创建房间并发送信令数据
-            const response = await fetch('http://localhost:3001/create-room', {
+            const response = await fetch('http://192.168.3.171:3001/create-room', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -45,8 +61,8 @@ const FileUploadArea: React.FC = () => {
                 body: JSON.stringify({
                     signal: signalData,
                     fileName: file.name,
-                    fileSize: file.size
-                })
+                    fileSize: file.size,
+                }),
             });
 
             if (!response.ok) {
@@ -56,28 +72,28 @@ const FileUploadArea: React.FC = () => {
             const data = await response.json();
             setRoomId(data.roomId);
             setShareLink(data.shareLink);
+            setIsWaiting(true);
 
-            // 创建房间后，等待设备 B 加入
             console.log('房间已创建，等待接收方加入');
 
-            // 开始轮询接收方加入状态
             await waitForReceiverToJoin(data.roomId, peer);
+            setIsWaiting(false);
 
-            // 当连接建立时
             peer.on('connect', () => {
-                console.log('连接已建立');
-                // sendFile(file, peer);
+                console.log('连接已建立，文件开始传输');
+                sendFile(file, peer);
             });
 
-            // 处理错误
-            peer.on('error', err => {
+            peer.on('error', (err) => {
                 console.error('Peer connection error:', err);
                 setIsTransferring(false);
+                setIsWaiting(false);
+                peerRef.current = null; // 清除无效连接
             });
-
         } catch (error) {
             console.error('Error in createRoom:', error);
             setIsTransferring(false);
+            setIsWaiting(false);
         }
     };
 
@@ -85,7 +101,7 @@ const FileUploadArea: React.FC = () => {
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 try {
-                    const response = await fetch(`http://localhost:3001/room/${roomId}/status`);
+                    const response = await fetch(`http://192.168.3.171:3001/room/${roomId}/status`);
                     if (!response.ok) {
                         throw new Error('获取房间状态失败');
                     }
@@ -112,48 +128,65 @@ const FileUploadArea: React.FC = () => {
         });
     };
 
-
     const sendFile = (file: File, peer: SimplePeer.Instance) => {
-        const chunkSize = 16384; // 16KB chunks
+        const chunkSize = 16384; // 16KB
         let offset = 0;
+        let sending = false;
 
-        // 首先发送文件信息
-        peer.send(JSON.stringify({
-            type: 'file-info',
-            name: file.name,
-            size: file.size
-        }));
+        const channel = (peer as any)._channel as RTCDataChannel;
 
-        // 分块读取并发送文件
+        if (!channel) {
+            console.error('无法访问底层 RTCDataChannel');
+            return;
+        }
+
+        channel.bufferedAmountLowThreshold = 512 * 1024;
+
+        peer.send(
+            JSON.stringify({
+                type: 'file-info',
+                name: file.name,
+                size: file.size,
+            })
+        );
+
         const reader = new FileReader();
+
+        const readNextChunk = () => {
+            if (offset >= file.size || sending) return;
+
+            if (channel.bufferedAmount > 1 * 1024 * 1024) return;
+
+            const slice = file.slice(offset, offset + chunkSize);
+            sending = true;
+            reader.readAsArrayBuffer(slice);
+        };
 
         reader.onload = (e) => {
             const chunk = e.target?.result;
             if (chunk) {
                 peer.send(chunk);
                 offset += chunkSize;
+                sending = false;
 
-                // 更新进度
                 const progress = Math.min(100, (offset / file.size) * 100);
                 setTransferProgress(progress);
 
-                // 继续读取下一块
                 if (offset < file.size) {
                     readNextChunk();
                 } else {
-                    // 传输完成
+                    peer.send(JSON.stringify({ type: 'transfer-complete' }));
                     setIsTransferring(false);
                     setSelectedFile(null);
+                    setCompletedFiles((prev) => [...prev, { name: file.name, size: file.size }]);
                 }
             }
         };
 
-        const readNextChunk = () => {
-            const slice = file.slice(offset, offset + chunkSize);
-            reader.readAsArrayBuffer(slice);
-        };
+        channel.addEventListener('bufferedamountlow', () => {
+            readNextChunk();
+        });
 
-        // 开始传输
         readNextChunk();
     };
 
@@ -170,6 +203,22 @@ const FileUploadArea: React.FC = () => {
         onDrop,
         multiple: false
     });
+
+    const handleCopyLink = async () => {
+        const success = await copyToClipboard(shareLink);
+        if (success) {
+            setCopyMessage('链接已复制到剪贴板');
+            setShowCopySuccess(true);
+        }
+    };
+
+    const handleCopyRoomId = async () => {
+        const success = await copyToClipboard(roomId);
+        if (success) {
+            setCopyMessage('房间号已复制到剪贴板');
+            setShowCopySuccess(true);
+        }
+    };
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -190,25 +239,96 @@ const FileUploadArea: React.FC = () => {
                     {isDragActive ? '放开以上传文件' : '点击或拖放文件到此处'}
                 </Typography>
             </UploadBox>
+            {
+                isWaiting && (
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="textSecondary">
+                            房间ID：
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                            <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                                {roomId}
+                            </Typography>
+                            <IconButton onClick={handleCopyRoomId} size="small">
+                                <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                        </Box>
+
+                        <Typography variant="body2" color="textSecondary">
+                            分享链接：
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                            <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                                {shareLink}
+                            </Typography>
+                            <IconButton onClick={handleCopyLink} size="small">
+                                <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                            <QRCodeSVG value={shareLink} size={200} />
+                        </Box>
+
+                        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                            将此链接发送给接收方以开始传输
+                        </Typography>
+
+                        <Snackbar
+                            open={showCopySuccess}
+                            autoHideDuration={3000}
+                            onClose={() => setShowCopySuccess(false)}
+                            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                        >
+                            <Alert onClose={() => setShowCopySuccess(false)} severity="success" sx={{ width: '100%' }}>
+                                {copyMessage}
+                            </Alert>
+                        </Snackbar>
+                    </Box>
+                )
+            }
             {isTransferring && (
                 <Box sx={{ mt: 2 }}>
                     <LinearProgress variant="determinate" value={transferProgress} />
                     <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 1 }}>
                         传输进度: {transferProgress}%
                     </Typography>
-                    {shareLink && (
-                        <Box sx={{ mt: 2, textAlign: 'center' }}>
-                            <Typography variant="body2" color="textSecondary">
-                                分享链接：
-                            </Typography>
-                            <Link href={shareLink} target="_blank" sx={{ wordBreak: 'break-all' }}>
-                                {shareLink}
-                            </Link>
-                            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                                将此链接发送给接收方以开始传输
-                            </Typography>
-                        </Box>
-                    )}
+                </Box>
+            )}
+
+            {completedFiles.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                        已完成的传输
+                    </Typography>
+                    <List>
+                        {completedFiles.map((file, index) => (
+                            <ListItem key={index}>
+                                <ListItemIcon>
+                                    <Box sx={{ position: 'relative' }}>
+                                        <Avatar sx={{ bgcolor: 'background.paper' }}>
+                                            <FileIcon fileName={file.name} />
+                                        </Avatar>
+                                        <CheckCircleIcon
+                                            sx={{
+                                                position: 'absolute',
+                                                bottom: -4,
+                                                right: -4,
+                                                color: 'success.main',
+                                                fontSize: '1.2rem',
+                                                bgcolor: 'background.paper',
+                                                borderRadius: '50%'
+                                            }}
+                                        />
+                                    </Box>
+                                </ListItemIcon>
+                                <ListItemText
+                                    primary={file.name}
+                                    secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
+                                />
+                            </ListItem>
+                        ))}
+                    </List>
                 </Box>
             )}
         </Box>
