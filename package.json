@@ -1,7 +1,12 @@
 {
-  "name": "ISendToU",
+  "name": "i-send-to-u",
   "version": "1.0.0",
   "private": true,
+  "description": "A web app for file transfer using WebRTC and Node.js",
+  "author": {
+    "name": "xxsfish",
+    "url": "https://xxsfish.com"
+  },
   "type": "module",
   "scripts": {
     "build": "rsbuild build",
