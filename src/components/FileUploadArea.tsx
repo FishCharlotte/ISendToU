@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Box, Paper, Typography, LinearProgress, IconButton } from '@mui/material';
+import { Box, Paper, Typography, LinearProgress, IconButton, Grid } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { styled } from '@mui/material/styles';
 import SimplePeer, {SignalData} from 'simple-peer';
@@ -22,7 +22,11 @@ const UploadBox = styled(Paper)(({ theme }) => ({
     },
 }));
 
-const FileUploadArea: React.FC = () => {
+interface FileUploadAreaProps {
+    onFileUpload?: () => void;
+}
+
+const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
     const [transferProgress, setTransferProgress] = useState<number>(0);
     const [isWaiting, setIsWaiting] = useState<boolean>(false);
     const [isTransferring, setIsTransferring] = useState<boolean>(false);
@@ -178,7 +182,8 @@ const FileUploadArea: React.FC = () => {
         setSelectedFile(file);
         setIsTransferring(true);
         createRoom(file);
-    }, []);
+        onFileUpload?.(); // 调用onFileUpload回调
+    }, [onFileUpload]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -203,89 +208,102 @@ const FileUploadArea: React.FC = () => {
 
     return (
         <Box sx={{ width: '100%' }}>
-            <UploadBox {...getRootProps()}
-                       sx={{
-                           height: '400px',
-                           display: 'flex',
-                           flexDirection: 'column',
-                           justifyContent: 'center',
-                           alignItems: 'center',
-                       }}>
-                <input {...getInputProps()} />
-                <CloudUploadIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                    上传您的文件和文件夹
-                </Typography>
-                <Typography variant="body1" color="textSecondary">
-                    {isDragActive ? '放开以上传文件' : '点击或拖放文件到此处'}
-                </Typography>
-            </UploadBox>
-            {
-                isWaiting && (
-                    <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" color="textSecondary">
-                            房间ID：
+            <Grid container spacing={3}>
+                <Grid item xs={12} md={isWaiting ? 6 : 12}>
+                    <UploadBox {...getRootProps()}
+                           sx={{
+                               height: '400px',
+                               display: 'flex',
+                               flexDirection: 'column',
+                               justifyContent: 'center',
+                               alignItems: 'center',
+                           }}>
+                        <input {...getInputProps()} />
+                        <CloudUploadIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+                        <Typography variant="h6" gutterBottom>
+                            上传您的文件和文件夹
                         </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                            <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                                {roomId}
+                        <Typography variant="body1" color="textSecondary">
+                            {isDragActive ? '放开以上传文件' : '点击或拖放文件到此处'}
+                        </Typography>
+                    </UploadBox>
+                    {isTransferring && (
+                        <Box sx={{ mt: 2 }}>
+                            <LinearProgress variant="determinate" value={transferProgress} />
+                            <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 1 }}>
+                                传输进度: {transferProgress}%
                             </Typography>
-                            <IconButton onClick={handleCopyRoomId} size="small">
-                                <ContentCopyIcon fontSize="small" />
-                            </IconButton>
                         </Box>
+                    )}
+                </Grid>
 
-                        <Typography variant="body2" color="textSecondary">
-                            分享链接：
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                            <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                                {shareLink}
+                {isWaiting && (
+                    <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 3, height: '100%' }}>
+                            <Typography variant="h6" gutterBottom>
+                                分享信息
                             </Typography>
-                            <IconButton onClick={handleCopyLink} size="small">
-                                <ContentCopyIcon fontSize="small" />
-                            </IconButton>
-                        </Box>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <Box>
+                                    <Typography variant="body2" color="textSecondary">
+                                        房间ID：
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                                            {roomId}
+                                        </Typography>
+                                        <IconButton onClick={handleCopyRoomId} size="small">
+                                            <ContentCopyIcon fontSize="small" />
+                                        </IconButton>
+                                    </Box>
+                                </Box>
 
-                        <Box sx={{ display: 'flex', mt: 2 }}>
-                            <QRCodeSVG value={shareLink} size={200} />
-                        </Box>
+                                <Box>
+                                    <Typography variant="body2" color="textSecondary">
+                                        分享链接：
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                                            {shareLink}
+                                        </Typography>
+                                        <IconButton onClick={handleCopyLink} size="small">
+                                            <ContentCopyIcon fontSize="small" />
+                                        </IconButton>
+                                    </Box>
+                                </Box>
 
-                        <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
-                            将此链接发送给接收方以开始传输
-                        </Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                                    <QRCodeSVG value={shareLink} size={200} />
+                                </Box>
 
-                        <Snackbar
-                            open={showCopySuccess}
-                            autoHideDuration={3000}
-                            onClose={() => setShowCopySuccess(false)}
-                            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                        >
-                            <Alert onClose={() => setShowCopySuccess(false)} severity="success" sx={{ width: '100%' }}>
-                                {copyMessage}
-                            </Alert>
-                        </Snackbar>
-                    </Box>
-                )
-            }
-            {isTransferring && (
-                <Box sx={{ mt: 2 }}>
-                    <LinearProgress variant="determinate" value={transferProgress} />
-                    <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 1 }}>
-                        传输进度: {transferProgress}%
-                    </Typography>
-                </Box>
-            )}
+                                <Typography variant="body2" color="textSecondary" align="center">
+                                    将此链接发送给接收方以开始传输
+                                </Typography>
+                            </Box>
+                        </Paper>
+                    </Grid>
+                )}
+            </Grid>
 
             {completedFiles.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                     <Typography variant="h6" gutterBottom>
                         已完成的传输
                     </Typography>
-
                     <CompletedFilesList data={completedFiles} />
                 </Box>
             )}
+
+            <Snackbar
+                open={showCopySuccess}
+                autoHideDuration={3000}
+                onClose={() => setShowCopySuccess(false)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            >
+                <Alert onClose={() => setShowCopySuccess(false)} severity="success" sx={{ width: '100%' }}>
+                    {copyMessage}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };
