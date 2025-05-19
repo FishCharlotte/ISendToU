@@ -1,16 +1,17 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Box, Paper, Typography, LinearProgress, IconButton, Grid } from '@mui/material';
+import { Box, Paper, Typography, LinearProgress, IconButton, Grid, Alert } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { styled } from '@mui/material/styles';
 import SimplePeer, {SignalData} from 'simple-peer';
 import { QRCodeSVG } from 'qrcode.react';
 import { copyToClipboard } from '../utils';
-import { Snackbar, Alert } from '@mui/material';
+import { Snackbar, Alert as MuiAlert } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { CompletedFilesList } from "./CompletedFilesList";
 import {checkRoomStatusApi, createRoomApi} from "../api";
 import TimeoutAlert from './TimeoutAlert';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 const UploadBox = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4),
@@ -34,6 +35,7 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout
     const [transferProgress, setTransferProgress] = useState<number>(0);
     const [isWaiting, setIsWaiting] = useState<boolean>(false);
     const [isTransferring, setIsTransferring] = useState<boolean>(false);
+    const [isReceiverJoined, setIsReceiverJoined] = useState<boolean>(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [shareLink, setShareLink] = useState<string>('');
     const [roomId, setRoomId] = useState<string>('');
@@ -110,7 +112,7 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout
 
     const waitForReceiverToJoin = async (roomId: string, peer: SimplePeer.Instance): Promise<void> => {
         return new Promise((resolve, reject) => {
-            setCountdown(WAIT_TIMEOUT); // 使用常量重置倒计时
+            setCountdown(WAIT_TIMEOUT);
             const countdownInterval = setInterval(() => {
                 setCountdown(prev => {
                     if (prev <= 1) {
@@ -129,6 +131,7 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout
                     if (status.receiverSignal) {
                         console.log('接收方已加入，开始创建 WebRTC 连接');
                         peer.signal(status.receiverSignal);
+                        setIsReceiverJoined(true);
                         clearInterval(interval);
                         clearInterval(countdownInterval);
                         clearTimeout(timeout);
@@ -144,7 +147,7 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout
                 clearInterval(countdownInterval);
                 setIsTimeout(true);
                 reject(new Error('接收方未在规定时间内加入，房间已关闭'));
-            }, WAIT_TIMEOUT * 1000); // 使用常量设置超时时间
+            }, WAIT_TIMEOUT * 1000);
         });
     };
 
@@ -211,18 +214,19 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout
     };
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
-        if (acceptedFiles.length === 0) return;
+        if (acceptedFiles.length === 0 || isTransferring) return;
 
         const file = acceptedFiles[0];
         setSelectedFile(file);
         setIsTransferring(true);
         createRoom(file);
-        onFileUpload?.(); // 调用onFileUpload回调
-    }, [onFileUpload]);
+        onFileUpload?.();
+    }, [onFileUpload, isTransferring]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
-        multiple: false
+        multiple: false,
+        disabled: isTransferring
     });
 
     const handleCopyLink = async () => {
@@ -247,97 +251,141 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout
 
     return (
         <Box sx={{ width: '100%' }}>
+            {isReceiverJoined && (
+                <Alert 
+                    severity="success" 
+                    icon={<CheckCircleIcon />}
+                    sx={{ 
+                        mb: 3,
+                        '& .MuiAlert-message': {
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                        }
+                    }}
+                >
+                    <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        接收方已成功连接，文件传输已开始...
+                    </Typography>
+                </Alert>
+            )}
+
             <Grid container spacing={3}>
-                <Grid item xs={12} md={isWaiting ? 6 : 12}>
-                    <UploadBox {...getRootProps()}
-                           sx={{
-                               height: '400px',
-                               display: 'flex',
-                               flexDirection: 'column',
-                               justifyContent: 'center',
-                               alignItems: 'center',
-                           }}>
-                        <input {...getInputProps()} />
-                        <CloudUploadIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                        <Typography variant="h6" gutterBottom>
-                            上传您的文件和文件夹
-                        </Typography>
-                        <Typography variant="body1" color="textSecondary">
-                            {isDragActive ? '放开以上传文件' : '点击或拖放文件到此处'}
-                        </Typography>
-                    </UploadBox>
-                    {isTransferring && (
-                        <Box sx={{ mt: 2 }}>
-                            <LinearProgress variant="determinate" value={transferProgress} />
-                            <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 1 }}>
-                                传输进度: {transferProgress}%
+                {(!isWaiting || isReceiverJoined) && (
+                    <Grid item xs={12} md={isWaiting ? 6 : 12}>
+                        <UploadBox {...getRootProps()}
+                               sx={{
+                                   height: '400px',
+                                   display: 'flex',
+                                   flexDirection: 'column',
+                                   justifyContent: 'center',
+                                   alignItems: 'center',
+                                   opacity: isTransferring ? 0.5 : 1,
+                                   pointerEvents: isTransferring ? 'none' : 'auto'
+                               }}>
+                            <input {...getInputProps()} />
+                            <CloudUploadIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+                            <Typography variant="h6" gutterBottom>
+                                {isTransferring ? '文件传输中...' : '上传您的文件和文件夹'}
                             </Typography>
-                        </Box>
-                    )}
-                </Grid>
+                            <Typography variant="body1" color="textSecondary">
+                                {isDragActive ? '放开以上传文件' : '点击或拖放文件到此处'}
+                            </Typography>
+                        </UploadBox>
+                        {isTransferring && (
+                            <Box sx={{ mt: 2 }}>
+                                <LinearProgress variant="determinate" value={transferProgress} />
+                                <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 1 }}>
+                                    传输进度: {transferProgress}%
+                                </Typography>
+                            </Box>
+                        )}
+                    </Grid>
+                )}
 
                 {isWaiting && (
-                    <Grid item xs={12} md={6}>
+                    <Grid item xs={12} md={isReceiverJoined ? 6 : 12}>
                         <Paper sx={{ p: 3, height: '100%' }}>
-                            <Typography variant="h6" gutterBottom>
-                                邀请接收方
-                            </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <Box>
-                                    <Typography variant="body2" color="textSecondary">
-                                        房间号：
+                            {!isReceiverJoined ? (
+                                <>
+                                    <Typography variant="h6" gutterBottom>
+                                        邀请接收方
                                     </Typography>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                                            {roomId}
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <Box>
+                                            <Typography variant="body2" color="textSecondary">
+                                                房间号：
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                                                    {roomId}
+                                                </Typography>
+                                                <IconButton onClick={handleCopyRoomId} size="small">
+                                                    <ContentCopyIcon fontSize="small" />
+                                                </IconButton>
+                                            </Box>
+                                        </Box>
+
+                                        <Box>
+                                            <Typography variant="body2" color="textSecondary">
+                                                分享链接：
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                                                    {shareLink}
+                                                </Typography>
+                                                <IconButton onClick={handleCopyLink} size="small">
+                                                    <ContentCopyIcon fontSize="small" />
+                                                </IconButton>
+                                            </Box>
+                                        </Box>
+
+                                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                                            <QRCodeSVG value={shareLink} size={200} />
+                                        </Box>
+
+                                        <Typography variant="body2" color="textSecondary" align="center">
+                                            将此链接发送给接收方以开始传输
                                         </Typography>
-                                        <IconButton onClick={handleCopyRoomId} size="small">
-                                            <ContentCopyIcon fontSize="small" />
-                                        </IconButton>
+
+                                        <Box sx={{
+                                            display: 'flex',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            mt: 1
+                                        }}>
+                                            <Typography
+                                                variant="body2"
+                                                color={countdown <= 10 ? 'error' : 'textSecondary'}
+                                                sx={{
+                                                    fontWeight: 'bold',
+                                                    transition: 'color 0.3s'
+                                                }}
+                                            >
+                                                剩余时间：{countdown} 秒
+                                            </Typography>
+                                        </Box>
                                     </Box>
-                                </Box>
-
-                                <Box>
-                                    <Typography variant="body2" color="textSecondary">
-                                        分享链接：
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                                            {shareLink}
-                                        </Typography>
-                                        <IconButton onClick={handleCopyLink} size="small">
-                                            <ContentCopyIcon fontSize="small" />
-                                        </IconButton>
-                                    </Box>
-                                </Box>
-
-                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                                    <QRCodeSVG value={shareLink} size={200} />
-                                </Box>
-
-                                <Typography variant="body2" color="textSecondary" align="center">
-                                    将此链接发送给接收方以开始传输
-                                </Typography>
-
-                                <Box sx={{
-                                    display: 'flex',
+                                </>
+                            ) : (
+                                <Box sx={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    alignItems: 'center', 
                                     justifyContent: 'center',
-                                    alignItems: 'center',
-                                    gap: 1,
-                                    mt: 1
+                                    height: '100%',
+                                    gap: 2
                                 }}>
-                                    <Typography
-                                        variant="body2"
-                                        color={countdown <= 10 ? 'error' : 'textSecondary'}
-                                        sx={{
-                                            fontWeight: 'bold',
-                                            transition: 'color 0.3s'
-                                        }}
-                                    >
-                                        剩余时间：{countdown} 秒
+                                    <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main' }} />
+                                    <Typography variant="h6" align="center">
+                                        接收方已加入
+                                    </Typography>
+                                    <Typography variant="body1" color="textSecondary" align="center">
+                                        文件传输已开始，请等待传输完成
                                     </Typography>
                                 </Box>
-                            </Box>
+                            )}
                         </Paper>
                     </Grid>
                 )}
@@ -358,9 +406,9 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout
                 onClose={() => setShowCopySuccess(false)}
                 anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
             >
-                <Alert onClose={() => setShowCopySuccess(false)} severity="success" sx={{ width: '100%' }}>
+                <MuiAlert onClose={() => setShowCopySuccess(false)} severity="success" sx={{ width: '100%' }}>
                     {copyMessage}
-                </Alert>
+                </MuiAlert>
             </Snackbar>
         </Box>
     );

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Paper, Typography, LinearProgress } from '@mui/material';
+import { Box, Paper, Typography, LinearProgress, Alert, Snackbar } from '@mui/material';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import { styled } from '@mui/material/styles';
 import SimplePeer from 'simple-peer';
@@ -7,6 +7,7 @@ import { FileInfo } from '../types';
 import { saveFileToLocal } from "../utils";
 import {CompletedFilesList} from "./CompletedFilesList";
 import {checkRoomStatusApi, getSignalApi, joinRoomApi} from "../api";
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 
 const ReceiverBox = styled(Paper)(({ theme }) => ({
@@ -31,6 +32,7 @@ const FileReceiver: React.FC = () => {
     const peerRef = useRef<SimplePeer.Instance | null>(null);
     const [senderSignal, setSenderSignal] = useState<string | null>(null);
     const [completedFiles, setCompletedFiles] = useState<Array<FileInfo>>([]);
+    const fileBuffersRef = useRef<Map<string, Uint8Array[]>>(new Map());
 
     useEffect(() => {
         // 1. 从URL获取roomId
@@ -156,6 +158,8 @@ const FileReceiver: React.FC = () => {
 
                         // 保存文件到本地
                         saveFileToLocal(fileBuffer, fileInfo.name);
+                        // 保存文件缓冲区以供后续使用
+                        fileBuffersRef.current.set(fileInfo.name, fileBuffer);
 
                         fileBuffer = [];
                         receivedSize = 0;
@@ -180,9 +184,34 @@ const FileReceiver: React.FC = () => {
         };
     }, [canConnect, senderSignal, roomId]);
 
+    const handleSaveFile = (file: FileInfo) => {
+        const fileBuffer = fileBuffersRef.current.get(file.name);
+        if (fileBuffer) {
+            saveFileToLocal(fileBuffer, file.name);
+        }
+    };
 
     return (
         <Box sx={{ width: '100%' }}>
+            {isConnected && (
+                <Alert 
+                    severity="success" 
+                    icon={<CheckCircleIcon />}
+                    sx={{ 
+                        mb: 3,
+                        '& .MuiAlert-message': {
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                        }
+                    }}
+                >
+                    <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        已成功连接到发送方，等待文件传输...
+                    </Typography>
+                </Alert>
+            )}
+
             <ReceiverBox>
                 <CloudDownloadIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
                 <Typography variant="h6" gutterBottom>
@@ -213,7 +242,10 @@ const FileReceiver: React.FC = () => {
                     <Typography variant="h6" gutterBottom>
                         已接收的文件
                     </Typography>
-                    <CompletedFilesList data={completedFiles} />
+                    <CompletedFilesList 
+                        data={completedFiles} 
+                        onSaveFile={handleSaveFile}
+                    />
                 </Box>
             )}
         </Box>

@@ -1,18 +1,33 @@
-import { Avatar, Box, List, ListItem, ListItemIcon, ListItemText } from "@mui/material";
+import { Avatar, Box, List, ListItem, ListItemIcon, ListItemText, IconButton } from "@mui/material";
 import { FileIcon } from "./FileIcon";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import SaveIcon from "@mui/icons-material/Save";
 import React from "react";
 import { FileInfo } from "../types";
 
 export interface CompletedFilesListProps {
     data: Array<FileInfo>; // 已完成文件列表
+    onSaveFile?: (file: FileInfo) => void; // 可选的保存文件回调函数
 }
 
-export const CompletedFilesList: React.FC<CompletedFilesListProps> = ({ data }) => {
+export const CompletedFilesList: React.FC<CompletedFilesListProps> = ({ data, onSaveFile }) => {
     return (
         <List>
             {data.map((file, index) => (
-                <ListItem key={index}>
+                <ListItem 
+                    key={index}
+                    secondaryAction={
+                        onSaveFile && (
+                            <IconButton 
+                                edge="end" 
+                                aria-label="save"
+                                onClick={() => onSaveFile(file)}
+                            >
+                                <SaveIcon />
+                            </IconButton>
+                        )
+                    }
+                >
                     <ListItemIcon>
                         <Box sx={{ position: 'relative' }}>
                             <Avatar sx={{ bgcolor: 'background.paper' }}>
