@@ -1,16 +1,14 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Box, Paper, Typography, LinearProgress, Link, List, ListItem, ListItemIcon, ListItemText, Avatar, IconButton } from '@mui/material';
+import { Box, Paper, Typography, LinearProgress, IconButton } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { styled } from '@mui/material/styles';
 import SimplePeer from 'simple-peer';
-import {FileIcon} from "./FileIcon";
 import { QRCodeSVG } from 'qrcode.react';
 import { copyToClipboard } from '../utils';
 import { Snackbar, Alert } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import {CompletedFilesList} from "./CompletedFilesList";
+import { CompletedFilesList } from "./CompletedFilesList";
 
 const UploadBox = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4),

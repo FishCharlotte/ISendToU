@@ -1,11 +1,9 @@
-import React, {useEffect, useRef, useState} from 'react';
-import { Box, Paper, Typography, LinearProgress, List, ListItem, ListItemIcon, ListItemText, Avatar } from '@mui/material';
+import React, { useEffect, useRef, useState } from 'react';
+import { Box, Paper, Typography, LinearProgress } from '@mui/material';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { styled } from '@mui/material/styles';
 import SimplePeer from 'simple-peer';
 import { FileInfo } from '../types';
-import { FileIcon } from './FileIcon';
 import { saveFileToLocal } from "../utils";
 import {CompletedFilesList} from "./CompletedFilesList";
 
