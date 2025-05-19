@@ -10,6 +10,7 @@ import { Snackbar, Alert } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { CompletedFilesList } from "./CompletedFilesList";
 import {checkRoomStatusApi, createRoomApi} from "../api";
+import TimeoutAlert from './TimeoutAlert';
 
 const UploadBox = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4),
@@ -24,9 +25,12 @@ const UploadBox = styled(Paper)(({ theme }) => ({
 
 interface FileUploadAreaProps {
     onFileUpload?: () => void;
+    onTimeout?: () => void;
 }
 
-const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
+const WAIT_TIMEOUT = 60; // 等待接收方加入的超时时间（秒）
+
+const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload, onTimeout }) => {
     const [transferProgress, setTransferProgress] = useState<number>(0);
     const [isWaiting, setIsWaiting] = useState<boolean>(false);
     const [isTransferring, setIsTransferring] = useState<boolean>(false);
@@ -34,9 +38,27 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
     const [shareLink, setShareLink] = useState<string>('');
     const [roomId, setRoomId] = useState<string>('');
     const [completedFiles, setCompletedFiles] = useState<Array<{ name: string; size: number }>>([]);
-    const peerRef = useRef<SimplePeer.Instance | null>(null); // 用于存储 SimplePeer 实例
+    const [isTimeout, setIsTimeout] = useState<boolean>(false);
+    const [countdown, setCountdown] = useState<number>(WAIT_TIMEOUT);
+    const peerRef = useRef<SimplePeer.Instance | null>(null);
     const [showCopySuccess, setShowCopySuccess] = useState(false);
     const [copyMessage, setCopyMessage] = useState('');
+
+    const resetState = () => {
+        setTransferProgress(0);
+        setIsWaiting(false);
+        setIsTransferring(false);
+        setSelectedFile(null);
+        setShareLink('');
+        setRoomId('');
+        setIsTimeout(false);
+        if (peerRef.current) {
+            peerRef.current.destroy();
+            peerRef.current = null;
+        }
+
+        onTimeout?.();
+    };
 
     const createRoom = async (file: File) => {
         try {
@@ -88,16 +110,27 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
 
     const waitForReceiverToJoin = async (roomId: string, peer: SimplePeer.Instance): Promise<void> => {
         return new Promise((resolve, reject) => {
+            setCountdown(WAIT_TIMEOUT); // 使用常量重置倒计时
+            const countdownInterval = setInterval(() => {
+                setCountdown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(countdownInterval);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+
             const interval = setInterval(async () => {
                 try {
                     const status = await checkRoomStatusApi(roomId);
                     console.log('房间状态:', status);
 
-                    // 判断是否有接收方信令数据
                     if (status.receiverSignal) {
                         console.log('接收方已加入，开始创建 WebRTC 连接');
                         peer.signal(status.receiverSignal);
                         clearInterval(interval);
+                        clearInterval(countdownInterval);
                         clearTimeout(timeout);
                         resolve();
                     }
@@ -106,10 +139,12 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
                 }
             }, 1000);
 
-            const timeout = setTimeout(() => {
+            const timeout = setTimeout(async () => {
                 clearInterval(interval);
-                reject(new Error('接收方未在规定时间内加入'));
-            }, 60000);
+                clearInterval(countdownInterval);
+                setIsTimeout(true);
+                reject(new Error('接收方未在规定时间内加入，房间已关闭'));
+            }, WAIT_TIMEOUT * 1000); // 使用常量设置超时时间
         });
     };
 
@@ -206,6 +241,10 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
         }
     };
 
+    if (isTimeout) {
+        return <TimeoutAlert onReset={resetState} />;
+    }
+
     return (
         <Box sx={{ width: '100%' }}>
             <Grid container spacing={3}>
@@ -241,12 +280,12 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
                     <Grid item xs={12} md={6}>
                         <Paper sx={{ p: 3, height: '100%' }}>
                             <Typography variant="h6" gutterBottom>
-                                分享信息
+                                邀请接收方
                             </Typography>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <Box>
                                     <Typography variant="body2" color="textSecondary">
-                                        房间ID：
+                                        房间号：
                                     </Typography>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                         <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
@@ -279,6 +318,25 @@ const FileUploadArea: React.FC<FileUploadAreaProps> = ({ onFileUpload }) => {
                                 <Typography variant="body2" color="textSecondary" align="center">
                                     将此链接发送给接收方以开始传输
                                 </Typography>
+
+                                <Box sx={{
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    mt: 1
+                                }}>
+                                    <Typography
+                                        variant="body2"
+                                        color={countdown <= 10 ? 'error' : 'textSecondary'}
+                                        sx={{
+                                            fontWeight: 'bold',
+                                            transition: 'color 0.3s'
+                                        }}
+                                    >
+                                        剩余时间：{countdown} 秒
+                                    </Typography>
+                                </Box>
                             </Box>
                         </Paper>
                     </Grid>

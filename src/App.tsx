@@ -136,6 +136,10 @@ const App: React.FC = () => {
         setHasUploadedFile(true);
     };
 
+    const handleTimeout = () => {
+        setHasUploadedFile(false);
+    };
+
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
@@ -147,7 +151,7 @@ const App: React.FC = () => {
                     ) : (
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={hasUploadedFile ? 12 : 6}>
-                                <FileUploadArea onFileUpload={handleFileUpload} />
+                                <FileUploadArea onFileUpload={handleFileUpload} onTimeout={handleTimeout} />
                             </Grid>
                             {!hasUploadedFile && (
                                 <Grid item xs={12} md={6}>

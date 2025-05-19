@@ -13,5 +13,12 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
+  },
+  source: {
+    define: {
+      'process.env.API_URL': JSON.stringify(process.env.NODE_ENV === 'production' 
+        ? 'https://send.xxsfish.com/'
+        : 'http://192.168.3.171:3001')
+    }
   }
 });

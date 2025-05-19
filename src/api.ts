@@ -3,9 +3,9 @@ import { SignalData } from "simple-peer";
 /**
  * Returns the host URL for the server
  */
-export const getHostUrl = () => {
-    return 'http://192.168.3.171:3001';
-}
+export const getBaseUrl = () => {
+    return process.env.API_URL || 'https://send.xxsfish.com/';
+};
 
 /**
  * Sends a GET request to the server
@@ -13,7 +13,7 @@ export const getHostUrl = () => {
  * @returns {Promise<any>} - A promise that resolves with the response
  */
 export const getApi = (uri: string): Promise<any> => {
-    const url = getHostUrl() + uri;
+    const url = getBaseUrl() + uri;
     return new Promise((resolve, reject) => {
         fetch(url, {
             method: 'GET',
@@ -46,7 +46,7 @@ export const getApi = (uri: string): Promise<any> => {
  * @returns {Promise<any>} - A promise that resolves with the response
  */
 export const postApi = (uri: string, data: any): Promise<any> => {
-    const url = getHostUrl() + uri;
+    const url = getBaseUrl() + uri;
     return new Promise((resolve, reject) => {
         fetch(url, {
             method: 'POST',
