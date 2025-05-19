@@ -113,6 +113,7 @@ const RoomInput: React.FC<{ onJoin: (roomId: string) => void }> = ({ onJoin }) =
 const App: React.FC = () => {
     const [isReceiver, setIsReceiver] = useState(false);
     const [roomId, setRoomId] = useState<string | null>(null);
+    const [hasUploadedFile, setHasUploadedFile] = useState(false);
 
     useEffect(() => {
         // 检查URL是否包含room参数
@@ -131,6 +132,10 @@ const App: React.FC = () => {
         window.history.pushState({}, '', `?room=${newRoomId}`);
     };
 
+    const handleFileUpload = () => {
+        setHasUploadedFile(true);
+    };
+
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
@@ -141,12 +146,14 @@ const App: React.FC = () => {
                         <FileReceiver />
                     ) : (
                         <Grid container spacing={3}>
-                            <Grid item xs={12} md={6}>
-                                <FileUploadArea />
+                            <Grid item xs={12} md={hasUploadedFile ? 12 : 6}>
+                                <FileUploadArea onFileUpload={handleFileUpload} />
                             </Grid>
-                            <Grid item xs={12} md={6}>
-                                <RoomInput onJoin={handleJoinRoom} />
-                            </Grid>
+                            {!hasUploadedFile && (
+                                <Grid item xs={12} md={6}>
+                                    <RoomInput onJoin={handleJoinRoom} />
+                                </Grid>
+                            )}
                         </Grid>
                     )}
                 </Container>
