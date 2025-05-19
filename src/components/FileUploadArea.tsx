@@ -3,12 +3,13 @@ import { useDropzone } from 'react-dropzone';
 import { Box, Paper, Typography, LinearProgress, IconButton } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { styled } from '@mui/material/styles';
-import SimplePeer from 'simple-peer';
+import SimplePeer, {SignalData} from 'simple-peer';
 import { QRCodeSVG } from 'qrcode.react';
 import { copyToClipboard } from '../utils';
 import { Snackbar, Alert } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { CompletedFilesList } from "./CompletedFilesList";
+import {checkRoomStatusApi, createRoomApi} from "../api";
 
 const UploadBox = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4),
@@ -48,27 +49,12 @@ const FileUploadArea: React.FC = () => {
 
             peerRef.current = peer; // 存储 SimplePeer 实例
 
-            const signalData = await new Promise((resolve) => {
+            const signalData: SignalData = await new Promise((resolve) => {
                 peer.on('signal', resolve);
             });
 
-            const response = await fetch('http://192.168.3.171:3001/create-room', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    signal: signalData,
-                    fileName: file.name,
-                    fileSize: file.size,
-                }),
-            });
+            const data = await createRoomApi(signalData, file.name, file.size);
 
-            if (!response.ok) {
-                throw new Error('创建房间失败');
-            }
-
-            const data = await response.json();
             setRoomId(data.roomId);
             setShareLink(data.shareLink);
             setIsWaiting(true);
@@ -100,11 +86,7 @@ const FileUploadArea: React.FC = () => {
         return new Promise((resolve, reject) => {
             const interval = setInterval(async () => {
                 try {
-                    const response = await fetch(`http://192.168.3.171:3001/room/${roomId}/status`);
-                    if (!response.ok) {
-                        throw new Error('获取房间状态失败');
-                    }
-                    const status = await response.json();
+                    const status = await checkRoomStatusApi(roomId);
                     console.log('房间状态:', status);
 
                     // 判断是否有接收方信令数据

@@ -6,6 +6,7 @@ import SimplePeer from 'simple-peer';
 import { FileInfo } from '../types';
 import { saveFileToLocal } from "../utils";
 import {CompletedFilesList} from "./CompletedFilesList";
+import {checkRoomStatusApi, getSignalApi, joinRoomApi} from "../api";
 
 
 const ReceiverBox = styled(Paper)(({ theme }) => ({
@@ -47,13 +48,10 @@ const FileReceiver: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (!isJoining) return;
+        if (!isJoining || roomId === null) return;
 
         // 2. 先检查房间状态
-        fetch(`http://192.168.3.171:3001/room/${roomId}/status`)
-            .then(statusResponse => {
-                return statusResponse.json();
-            })
+        checkRoomStatusApi(roomId)
             .then(status => {
                 console.log('statusResponse', status);
                 if (!status.exists || status.hasReceiver || !status.canJoin) {
@@ -65,10 +63,7 @@ const FileReceiver: React.FC = () => {
                 console.log("可以加入");
 
                 // 接收后台服务器的信令数据
-                return fetch(`http://192.168.3.171:3001/signal/${roomId}`);
-            })
-            .then(res => {
-                return res.json();
+                return getSignalApi(roomId);
             })
             .then(initiatorSignal => {
                 if (!initiatorSignal || !initiatorSignal.signal) {
@@ -86,7 +81,7 @@ const FileReceiver: React.FC = () => {
     }, [isJoining]);
 
     useEffect(() => {
-        if (!canConnect || !senderSignal) return;
+        if (!canConnect || !senderSignal || roomId === null) return;
 
         // 3. 创建WebRTC连接
         const peer = new SimplePeer({
@@ -110,21 +105,7 @@ const FileReceiver: React.FC = () => {
             try {
                 console.log('发送接收方信令数据');
 
-                const joinResponse = await fetch(`http://192.168.3.171:3001/join/${roomId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        signal: receiverSignal,
-                        role: 'receiver',
-                    }),
-                });
-
-                if (!joinResponse.ok) {
-                    const signalError = await joinResponse.json();
-                    throw new Error(signalError.error || '发送信令数据失败');
-                }
+                await joinRoomApi(roomId, receiverSignal);
 
                 console.log('接收方信令已成功发送');
                 console.log("加入房间");
@@ -197,7 +178,7 @@ const FileReceiver: React.FC = () => {
             console.log('组件卸载，清理连接');
             peer.destroy();
         };
-    }, [canConnect, senderSignal]);
+    }, [canConnect, senderSignal, roomId]);
 
 
     return (
